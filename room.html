@@ -1,0 +1,527 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ระบบจัดการห้องเช่า</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  :root{
+    --bg:#f7f1e8; --panel:#efe2d0; --brown:#8a6347; --brown-dark:#5e4129;
+    --line:#d9c5ae; --filter:#fff3d1; --filter-line:#e8c868; --card:#fff;
+    --ok:#3f8f5b; --busy:#c0504d; --book:#d98a1f; --fix:#8a8a8a; --wait:#f5c518;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:"Sarabun","Noto Sans Thai",system-ui,sans-serif;background:var(--bg);color:#3b2e24}
+  .hidden{display:none!important}
+  button{font:inherit;cursor:pointer;border:0;border-radius:8px;padding:9px 14px}
+  label{display:block;font-size:13px;margin:10px 0 4px;color:#6b5645}
+  input,select,textarea{width:100%;padding:9px 10px;border:1px solid var(--line);border-radius:8px;font:inherit;background:#fff}
+  textarea{resize:vertical;min-height:70px}
+  input:focus,select:focus,textarea:focus{outline:2px solid var(--brown);border-color:transparent}
+  .btn{background:var(--brown);color:#fff;width:100%;margin-top:12px}
+  .btn:hover{background:var(--brown-dark)}
+  .btn:disabled{opacity:.6;cursor:wait}
+  .btn.ghost{background:transparent;color:var(--brown-dark);border:1px solid var(--brown)}
+  .msg{font-size:13px;margin-top:8px;min-height:18px}
+  .row2{display:grid;grid-template-columns:1fr 1.4fr;gap:8px}
+
+  /* หน้าล็อกอิน */
+  #loginView{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px}
+  .loginCard{background:var(--panel);border:2px solid var(--line);border-radius:16px;padding:28px;width:100%;max-width:360px}
+  .loginCard h1{margin:0 0 6px;color:var(--brown-dark);font-size:24px}
+  .loginCard p{margin:0 0 10px;color:#7a6654;font-size:14px}
+
+  /* โครงหลัก */
+  .layout{display:grid;grid-template-columns:330px 1fr;min-height:100vh}
+
+  /* ซ้าย: panel */
+  aside{background:var(--panel);border-right:2px solid var(--line);padding:20px;overflow-y:auto;max-height:100vh;position:sticky;top:0}
+  aside h1{margin:0 0 4px;font-size:22px;color:var(--brown-dark)}
+  .clock{font-size:13px;color:#7a6654;margin-bottom:14px}
+  .stats{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-bottom:12px}
+  .stat{background:#fff;border-radius:10px;padding:8px;text-align:center;border:1px solid var(--line)}
+  .stat b{display:block;font-size:20px;color:var(--brown)}
+  .stat span{font-size:12px;color:#7a6654}
+  .stat.warn{background:#fff6cf;border-color:var(--filter-line)}
+  h2{font-size:16px;margin:16px 0 8px;color:var(--brown-dark)}
+  .userbar{font-size:12px;color:#7a6654;margin-bottom:6px}
+
+  /* รูปในฟอร์ม */
+  .thumbs{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-top:8px}
+  .th{position:relative;aspect-ratio:1;border-radius:8px;overflow:hidden;border:2px solid transparent;background:#eadfce}
+  .th.cover{border-color:var(--brown)}
+  .th img{width:100%;height:100%;object-fit:cover;display:block}
+  .th button{position:absolute;padding:0;width:24px;height:24px;line-height:24px;font-size:12px;border-radius:50%;
+    background:rgba(0,0,0,.6);color:#fff}
+  .th .x{top:4px;right:4px}
+  .th [data-cover]{bottom:4px;left:4px;background:rgba(138,99,71,.9)}
+  .th .tag{position:absolute;bottom:0;left:0;right:0;background:var(--brown);color:#fff;font-size:11px;text-align:center;padding:2px}
+  .hint{font-size:12px;color:#7a6654;margin-top:4px}
+
+  /* ขวา */
+  main{padding:20px}
+  .filter{background:var(--filter);border:2px solid var(--filter-line);border-radius:12px;padding:14px 16px;
+    display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end}
+  .filter div{flex:1;min-width:130px}
+  .filter label{margin-top:0}
+  .filter .btn{width:auto;margin:0}
+  .count{margin:14px 2px 10px;color:#6b5645;font-size:14px}
+
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:16px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;overflow:hidden;
+    box-shadow:0 2px 8px rgba(94,65,41,.08);display:flex;flex-direction:column}
+  .imgwrap{position:relative;height:180px;background:#eadfce;cursor:pointer}
+  .imgwrap img{width:100%;height:100%;object-fit:cover;display:block}
+  .imgwrap .noimg{height:100%;display:flex;align-items:center;justify-content:center;color:#a38b74}
+  .imgwrap .cnt{position:absolute;right:8px;bottom:8px;background:rgba(0,0,0,.65);color:#fff;font-size:12px;padding:3px 9px;border-radius:99px}
+  .imgwrap .zone{position:absolute;left:8px;top:8px;background:var(--brown-dark);color:#fff;font-size:13px;font-weight:700;padding:4px 12px;border-radius:8px;box-shadow:0 1px 4px rgba(0,0,0,.3)}
+  .imgwrap .zone.none{background:#9a9a9a;font-weight:400}
+  .card .body{padding:12px 14px;flex:1}
+  .card .top{display:flex;justify-content:space-between;align-items:center}
+  .card .no{font-size:18px;font-weight:700;color:var(--brown-dark)}
+  .badge{font-size:12px;color:#fff;padding:3px 10px;border-radius:99px}
+  .price{font-size:18px;color:var(--brown);margin:6px 0}
+  .furn{font-size:13px;color:#6b5645;white-space:pre-line}
+  .pay{margin-top:10px;padding:8px 10px;border-radius:8px;font-size:13px;display:flex;justify-content:space-between;align-items:center;gap:8px}
+  .pay b{display:block;font-size:14px}
+  .pay.paid{background:#e2f3e8;color:#23623b}
+  .pay.upcoming{background:#f3ece1;color:#6b5645}
+  .pay.waiting{background:var(--wait);color:#4d3a00}
+  .pay button{padding:5px 10px;font-size:12px;background:rgba(255,255,255,.75);color:#3b2e24;border:1px solid rgba(0,0,0,.2);white-space:nowrap}
+  .actions{display:flex;gap:8px;padding:0 14px 14px}
+  .actions button{flex:1;padding:7px;font-size:13px}
+  .edit{background:#f1e4d1;color:var(--brown-dark)}
+  .del{background:#f7dcd9;color:#a03a35}
+  .empty{grid-column:1/-1;text-align:center;padding:40px;color:#8a7662}
+
+  /* แกลเลอรี */
+  .modal{position:fixed;inset:0;background:rgba(40,28,18,.8);z-index:50;display:flex;align-items:center;justify-content:center;padding:16px}
+  .mbox{background:var(--bg);border-radius:16px;width:100%;max-width:860px;max-height:94vh;overflow:auto;padding:16px;position:relative}
+  .mbox h3{margin:0 40px 10px 0;color:var(--brown-dark)}
+  #mClose{position:absolute;top:12px;right:12px;background:var(--panel);color:var(--brown-dark);padding:6px 12px}
+  .mmain{position:relative;background:#000;border-radius:10px;overflow:hidden}
+  #mImg{width:100%;max-height:60vh;object-fit:contain;display:block}
+  .nav{position:absolute;top:50%;transform:translateY(-50%);background:rgba(255,255,255,.8);font-size:22px;padding:6px 14px}
+  #mPrev{left:8px} #mNext{right:8px}
+  .mthumbs{display:flex;gap:6px;margin-top:10px;overflow-x:auto;padding-bottom:4px}
+  .mthumbs img{width:80px;height:60px;object-fit:cover;border-radius:6px;cursor:pointer;opacity:.6;border:2px solid transparent}
+  .mthumbs img.on{opacity:1;border-color:var(--brown)}
+  .minfo{margin-top:10px;font-size:14px;color:#6b5645;white-space:pre-line}
+
+  @media(max-width:800px){
+    .layout{grid-template-columns:1fr}
+    aside{position:static;max-height:none}
+  }
+</style>
+</head>
+<body>
+
+<!-- หน้าล็อกอิน -->
+<div id="loginView">
+  <div class="loginCard">
+    <h1>🏢 ระบบจัดการห้องเช่า</h1>
+    <p>เข้าสู่ระบบผู้ดูแล</p>
+    <label>อีเมล</label><input id="email" type="email">
+    <label>รหัสผ่าน</label><input id="password" type="password">
+    <button class="btn" id="btnLogin">เข้าสู่ระบบ</button>
+    <div class="msg" id="loginMsg" style="color:#a03a35"></div>
+  </div>
+</div>
+
+<!-- ตัวระบบ -->
+<div id="app" class="layout hidden">
+
+  <aside>
+    <h1>🏢 ระบบจัดการห้องเช่า</h1>
+    <div class="clock">เวลาไทย: <span id="clock"></span></div>
+
+    <div class="stats">
+      <div class="stat"><b id="stAll">0</b><span>ห้องทั้งหมด</span></div>
+      <div class="stat"><b id="stFree">0</b><span>ว่าง</span></div>
+      <div class="stat"><b id="stBusy">0</b><span>มีผู้เช่า</span></div>
+      <div class="stat warn"><b id="stWait">0</b><span>รอค่าเช่า</span></div>
+    </div>
+
+    <div class="userbar"><span id="userEmail"></span> · <a href="#" id="btnLogout">ออกจากระบบ</a></div>
+
+    <h2 id="formTitle">เพิ่มห้องใหม่</h2>
+    <div class="row2">
+      <div><label>ตึก / โซน *</label>
+        <select id="fBuilding"></select></div>
+      <div><label>เลขห้อง *</label>
+        <input id="fNumber" placeholder="เช่น 101"></div>
+    </div>
+    <label>ราคาต่อเดือน (บาท) *</label><input id="fPrice" type="number" min="0" placeholder="เช่น 4500">
+    <label>เฟอร์นิเจอร์</label>
+    <textarea id="fFurn" placeholder="เช่น เตียง, ตู้เสื้อผ้า, แอร์, เครื่องทำน้ำอุ่น"></textarea>
+    <label>สถานะ</label>
+    <select id="fStatus">
+      <option>ว่าง</option><option>มีผู้เช่า</option><option>จอง</option><option>ปิดปรับปรุง</option>
+    </select>
+    <label>วันครบกำหนดจ่ายค่าเช่าของทุกเดือน (1-31) *</label>
+    <input id="fDue" type="number" min="1" max="31" placeholder="เช่น 20">
+
+    <label>รูปภาพ <span id="imgCount" style="color:#999"></span></label>
+    <input id="fFile" type="file" accept="image/*" multiple>
+    <div class="thumbs" id="thumbs"></div>
+    <div class="hint">รูปแรก = รูปหน้าปก กด ★ เพื่อเปลี่ยนหน้าปก กด ✕ เพื่อลบรูป</div>
+
+    <button class="btn" id="btnSave">บันทึก</button>
+    <button class="btn ghost" id="btnClear">ล้างฟอร์ม / ยกเลิกการแก้ไข</button>
+    <div class="msg" id="formMsg"></div>
+  </aside>
+
+  <main>
+    <div class="filter">
+      <div><label>ตึก / โซน</label><select id="fltBuilding"></select></div>
+      <div><label>ราคาต่ำสุด</label><input id="minP" type="number" placeholder="เช่น 4000"></div>
+      <div><label>ราคาสูงสุด</label><input id="maxP" type="number" placeholder="เช่น 5000"></div>
+      <div><label>สถานะห้อง</label>
+        <select id="fltStatus"><option value="">ทั้งหมด</option><option>ว่าง</option>
+        <option>มีผู้เช่า</option><option>จอง</option><option>ปิดปรับปรุง</option></select></div>
+      <div><label>สถานะค่าเช่า</label>
+        <select id="fltPay"><option value="">ทั้งหมด</option>
+        <option value="waiting">รอค่าเช่า</option><option value="upcoming">ยังไม่ถึงกำหนด</option>
+        <option value="paid">จ่ายแล้ว</option></select></div>
+      <div><label>ค้นหา (เลขห้อง / เฟอร์นิเจอร์)</label><input id="q" placeholder="เช่น 101 หรือ แอร์"></div>
+      <div><label>เรียงตาม</label>
+        <select id="sort"><option value="no">ตึก → เลขห้อง</option><option value="pa">ราคา ต่ำ → สูง</option>
+        <option value="pd">ราคา สูง → ต่ำ</option></select></div>
+      <button class="btn ghost" id="btnReset">รีเซ็ต</button>
+    </div>
+
+    <div class="count" id="count"></div>
+    <div class="grid" id="grid"></div>
+  </main>
+</div>
+
+<!-- แกลเลอรีรูป -->
+<div id="modal" class="modal hidden">
+  <div class="mbox">
+    <button id="mClose">✕ ปิด</button>
+    <h3 id="mTitle"></h3>
+    <div class="mmain">
+      <button class="nav" id="mPrev">‹</button>
+      <img id="mImg" alt="">
+      <button class="nav" id="mNext">›</button>
+    </div>
+    <div class="mthumbs" id="mThumbs"></div>
+    <div class="minfo" id="mInfo"></div>
+  </div>
+</div>
+
+<script>
+  const SUPABASE_URL = 'https://mhkafvwzkbodsaymcgrv.supabase.co';   // Project URL (ไม่มี /rest/v1/)
+  const SUPABASE_KEY = 'sb_publishable_jX2jb6ayKKVZuOSOhQiWHw_Ewx4z8iJ';   // publishable / anon key
+  const BUCKET = 'room-images';
+  const MAX_IMAGES = 10;
+  const BUILDINGS = ['A','B','C','D','E','F','G','H','I','J','K'];
+  const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+  const $ = id => document.getElementById(id);
+  const esc = s => String(s ?? '').replace(/[&<>"']/g,
+    c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  const COLORS = {'ว่าง':'var(--ok)','มีผู้เช่า':'var(--busy)','จอง':'var(--book)','ปิดปรับปรุง':'var(--fix)'};
+  const MONTHS = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+
+  let rooms = [], editingId = null, formImages = [], oldImages = [];
+
+  /* ---------- สร้าง dropdown ตึก ---------- */
+  $('fBuilding').innerHTML = '<option value="">-- เลือก --</option>' +
+    BUILDINGS.map(b => `<option value="${b}">ตึก ${b}</option>`).join('');
+  $('fltBuilding').innerHTML = '<option value="">ทุกตึก</option>' +
+    BUILDINGS.map(b => `<option value="${b}">ตึก ${b}</option>`).join('') +
+    '<option value="none">ยังไม่ระบุตึก</option>';
+
+  /* ---------- เวลาไทย + สถานะค่าเช่า ---------- */
+  function thaiToday(){
+    const p = new Intl.DateTimeFormat('en-CA', {timeZone:'Asia/Bangkok', year:'numeric', month:'2-digit', day:'2-digit'})
+      .formatToParts(new Date());
+    const g = t => +p.find(x => x.type === t).value;
+    return {y:g('year'), m:g('month'), d:g('day')};
+  }
+  const monthKey = t => `${t.y}-${String(t.m).padStart(2,'0')}`;
+
+  function payInfo(r){
+    if (r.status !== 'มีผู้เช่า') return null;
+    const t = thaiToday();
+    const lastDay = new Date(Date.UTC(t.y, t.m, 0)).getUTCDate();
+    const due = Math.min(r.due_day, lastDay);
+    const dueText = `${due} ${MONTHS[t.m - 1]}`;
+    if (r.paid_month === monthKey(t))
+      return {key:'paid', label:'จ่ายแล้ว', note:'ค่าเช่าเดือนนี้ชำระเรียบร้อย'};
+    const diff = due - t.d;
+    if (diff > 0)  return {key:'upcoming', label:'ยังไม่ถึงกำหนด', note:`อีก ${diff} วัน (กำหนด ${dueText})`};
+    if (diff === 0) return {key:'upcoming', label:'ครบกำหนดวันนี้', note:`กำหนด ${dueText}`};
+    return {key:'waiting', label:'รอค่าเช่า', note:`เลยกำหนด ${-diff} วัน (กำหนด ${dueText})`};
+  }
+
+  let lastDayKey = '';
+  function tick(){
+    $('clock').textContent = new Date().toLocaleString('th-TH',
+      {timeZone:'Asia/Bangkok', dateStyle:'medium', timeStyle:'short'});
+    const t = thaiToday(), k = `${t.y}-${t.m}-${t.d}`;
+    if (k !== lastDayKey){ lastDayKey = k; render(); }
+  }
+  setInterval(tick, 30000);
+
+  /* ---------- Auth ---------- */
+  $('btnLogin').onclick = async () => {
+    const { error } = await sb.auth.signInWithPassword({
+      email: $('email').value.trim(), password: $('password').value });
+    $('loginMsg').textContent = error ? 'ล็อกอินไม่สำเร็จ: ' + error.message : '';
+    if (error) console.error(error);
+  };
+  $('password').addEventListener('keydown', e => { if (e.key === 'Enter') $('btnLogin').click(); });
+  $('btnLogout').onclick = async e => { e.preventDefault(); await sb.auth.signOut(); };
+
+  sb.auth.onAuthStateChange((_e, session) => {
+    setTimeout(() => {
+      const on = !!session;
+      $('loginView').classList.toggle('hidden', on);
+      $('app').classList.toggle('hidden', !on);
+      $('userEmail').textContent = session?.user?.email ?? '';
+      if (on){ loadRooms(); tick(); } else { rooms = []; }
+    }, 0);
+  });
+
+  /* ---------- โหลดข้อมูล ---------- */
+  async function loadRooms(){
+    const { data, error } = await sb.from('rooms').select('*');
+    if (error){ $('count').textContent = 'โหลดข้อมูลไม่สำเร็จ: ' + error.message; return; }
+    rooms = data; render();
+  }
+
+  /* ---------- แสดงผล ---------- */
+  function byBuildingThenNumber(a, b){
+    const ba = a.building || 'ZZ', bb = b.building || 'ZZ';   // ห้องที่ยังไม่ระบุตึกไปอยู่ท้ายสุด
+    return ba.localeCompare(bb) ||
+      a.room_number.localeCompare(b.room_number, 'th', {numeric:true});
+  }
+
+  function render(){
+    $('stAll').textContent  = rooms.length;
+    $('stFree').textContent = rooms.filter(r => r.status === 'ว่าง').length;
+    $('stBusy').textContent = rooms.filter(r => r.status === 'มีผู้เช่า').length;
+    $('stWait').textContent = rooms.filter(r => payInfo(r)?.key === 'waiting').length;
+
+    const min = parseFloat($('minP').value), max = parseFloat($('maxP').value);
+    const bd = $('fltBuilding').value, st = $('fltStatus').value, pay = $('fltPay').value,
+          q = $('q').value.trim().toLowerCase();
+
+    let list = rooms.filter(r =>
+      (!bd || (bd === 'none' ? !r.building : r.building === bd)) &&
+      (isNaN(min) || r.price >= min) &&
+      (isNaN(max) || r.price <= max) &&
+      (!st || r.status === st) &&
+      (!pay || payInfo(r)?.key === pay) &&
+      (!q || r.room_number.toLowerCase().includes(q) || (r.furniture || '').toLowerCase().includes(q)));
+
+    const s = $('sort').value;
+    list.sort((a,b) => s === 'pa' ? a.price - b.price : s === 'pd' ? b.price - a.price
+      : byBuildingThenNumber(a, b));
+
+    const bdText = bd && bd !== 'none' ? ` ในตึก ${bd}` : '';
+    $('count').textContent = `พบ ${list.length} ห้อง${bdText} จากทั้งหมด ${rooms.length} ห้อง`;
+
+    $('grid').innerHTML = list.length ? list.map(r => {
+      const imgs = r.images || [], p = payInfo(r);
+      return `
+      <div class="card">
+        <div class="imgwrap" data-gal="${r.id}" title="กดเพื่อดูรูปทั้งหมด">
+          ${imgs.length ? `<img src="${esc(imgs[0])}" alt="ห้อง ${esc(r.room_number)}" loading="lazy">
+                          <span class="cnt">🖼 ${imgs.length} รูป</span>`
+                        : `<div class="noimg">ไม่มีรูปภาพ</div>`}
+          <span class="zone ${r.building ? '' : 'none'}">${r.building ? 'ตึก ' + esc(r.building) : 'ยังไม่ระบุตึก'}</span>
+        </div>
+        <div class="body">
+          <div class="top"><span class="no">ห้อง ${esc(r.room_number)}</span>
+            <span class="badge" style="background:${COLORS[r.status] || '#888'}">${esc(r.status)}</span></div>
+          <div class="price">฿${Number(r.price).toLocaleString()} / เดือน</div>
+          <div class="furn">${esc(r.furniture) || '-'}</div>
+          ${p ? `<div class="pay ${p.key}">
+            <div><b>${p.label}</b>${p.note}</div>
+            <button data-pay="${r.id}">${p.key === 'paid' ? 'ยกเลิก' : '✓ จ่ายแล้ว'}</button>
+          </div>` : ''}
+        </div>
+        <div class="actions">
+          <button class="edit" data-edit="${r.id}">แก้ไข</button>
+          <button class="del" data-del="${r.id}">ลบ</button>
+        </div>
+      </div>`;
+    }).join('') : `<div class="empty">ไม่พบห้องที่ตรงกับเงื่อนไข</div>`;
+  }
+
+  ['fltBuilding','minP','maxP','fltStatus','fltPay','q','sort'].forEach(id => $(id).addEventListener('input', render));
+  $('btnReset').onclick = () => {
+    ['fltBuilding','minP','maxP','fltStatus','fltPay','q'].forEach(id => $(id).value = '');
+    $('sort').value = 'no'; render();
+  };
+
+  /* ---------- รูปในฟอร์ม ---------- */
+  function renderThumbs(){
+    $('thumbs').innerHTML = formImages.map((im, i) => `
+      <div class="th ${i === 0 ? 'cover' : ''}">
+        <img src="${esc(im.url)}" alt="">
+        ${i === 0 ? '<span class="tag">หน้าปก</span>'
+                  : `<button data-cover="${i}" title="ตั้งเป็นรูปหน้าปก">★</button>`}
+        <button class="x" data-rm="${i}" title="ลบรูป">✕</button>
+      </div>`).join('');
+    $('imgCount').textContent = formImages.length ? `(${formImages.length}/${MAX_IMAGES})` : '';
+  }
+
+  $('fFile').onchange = e => {
+    for (const f of e.target.files){
+      if (formImages.length >= MAX_IMAGES){ alert(`เพิ่มได้สูงสุด ${MAX_IMAGES} รูปต่อห้อง`); break; }
+      formImages.push({file:f, url:URL.createObjectURL(f)});
+    }
+    e.target.value = ''; renderThumbs();
+  };
+
+  $('thumbs').onclick = e => {
+    const b = e.target.closest('button'); if (!b) return;
+    if (b.dataset.rm !== undefined) formImages.splice(+b.dataset.rm, 1);
+    if (b.dataset.cover !== undefined) formImages.unshift(formImages.splice(+b.dataset.cover, 1)[0]);
+    renderThumbs();
+  };
+
+  async function compress(file, maxSize = 1280, quality = 0.8){
+    const bmp = await createImageBitmap(file);
+    const k = Math.min(1, maxSize / Math.max(bmp.width, bmp.height));
+    const c = document.createElement('canvas');
+    c.width = Math.round(bmp.width * k); c.height = Math.round(bmp.height * k);
+    c.getContext('2d').drawImage(bmp, 0, 0, c.width, c.height);
+    return new Promise(res => c.toBlob(res, 'image/jpeg', quality));
+  }
+
+  async function removeImage(url){
+    if (!url) return;
+    const path = url.split(`/${BUCKET}/`)[1];
+    if (path) await sb.storage.from(BUCKET).remove([decodeURIComponent(path)]);
+  }
+
+  /* ---------- ฟอร์ม ---------- */
+  function clearForm(){
+    editingId = null; formImages = []; oldImages = [];
+    ['fNumber','fPrice','fFurn','fDue'].forEach(id => $(id).value = '');
+    $('fBuilding').value = '';
+    $('fStatus').value = 'ว่าง';
+    $('formTitle').textContent = 'เพิ่มห้องใหม่';
+    $('formMsg').textContent = '';
+    renderThumbs();
+  }
+  $('btnClear').onclick = clearForm;
+
+  $('grid').onclick = async e => {
+    const b = e.target.closest('[data-edit],[data-del],[data-pay],[data-gal]');
+    if (!b) return;
+    const r = rooms.find(x => x.id == (b.dataset.edit || b.dataset.del || b.dataset.pay || b.dataset.gal));
+    if (!r) return;
+
+    if (b.dataset.gal) return openGallery(r);
+
+    if (b.dataset.edit){
+      editingId = r.id; oldImages = [...(r.images || [])];
+      formImages = oldImages.map(url => ({url}));
+      $('fBuilding').value = r.building || '';
+      $('fNumber').value = r.room_number; $('fPrice').value = r.price;
+      $('fFurn').value = r.furniture || ''; $('fStatus').value = r.status;
+      $('fDue').value = r.due_day;
+      $('formTitle').textContent = `แก้ไขห้อง ${r.building ? r.building + '-' : ''}${r.room_number}`;
+      renderThumbs(); window.scrollTo({top:0, behavior:'smooth'});
+    }
+
+    if (b.dataset.pay){
+      const paid = payInfo(r)?.key === 'paid';
+      const { error } = await sb.from('rooms')
+        .update({paid_month: paid ? null : monthKey(thaiToday())}).eq('id', r.id);
+      if (error) return alert('บันทึกไม่สำเร็จ: ' + error.message);
+      loadRooms();
+    }
+
+    if (b.dataset.del){
+      if (!confirm(`ยืนยันการลบห้อง ${r.building ? 'ตึก ' + r.building + ' ' : ''}${r.room_number} ?`)) return;
+      const { error } = await sb.from('rooms').delete().eq('id', r.id);
+      if (error) return alert('ลบไม่สำเร็จ: ' + error.message);
+      for (const u of (r.images || [])) await removeImage(u);
+      loadRooms();
+    }
+  };
+
+  $('btnSave').onclick = async () => {
+    const msg = $('formMsg'), btn = $('btnSave');
+    const building = $('fBuilding').value;
+    const number = $('fNumber').value.trim(), price = parseFloat($('fPrice').value), due = parseInt($('fDue').value);
+    if (!building || !number || isNaN(price) || !(due >= 1 && due <= 31)){
+      msg.style.color = '#a03a35';
+      msg.textContent = 'กรุณาเลือกตึก กรอกเลขห้อง ราคา และวันครบกำหนด (1-31)'; return;
+    }
+    btn.disabled = true; msg.style.color = '#6b5645'; msg.textContent = 'กำลังบันทึก...';
+
+    try {
+      const finalUrls = [];
+      for (const im of formImages){
+        if (im.file){
+          const blob = await compress(im.file);
+          const path = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}.jpg`;
+          const { error } = await sb.storage.from(BUCKET).upload(path, blob, {contentType:'image/jpeg'});
+          if (error) throw error;
+          finalUrls.push(sb.storage.from(BUCKET).getPublicUrl(path).data.publicUrl);
+        } else finalUrls.push(im.url);
+      }
+      const removed = oldImages.filter(u => !finalUrls.includes(u));
+
+      const payload = { building, room_number: number, price, due_day: due,
+                        furniture: $('fFurn').value.trim(), status: $('fStatus').value, images: finalUrls };
+      const { error } = editingId
+        ? await sb.from('rooms').update(payload).eq('id', editingId)
+        : await sb.from('rooms').insert(payload);
+      if (error) throw error;
+
+      for (const u of removed) await removeImage(u);
+      clearForm(); msg.style.color = 'var(--ok)'; msg.textContent = 'บันทึกเรียบร้อย ✓';
+      loadRooms();
+    } catch (err){
+      msg.style.color = '#a03a35';
+      msg.textContent = err.code === '23505' ? `ตึก ${building} มีห้อง ${number} อยู่แล้ว`
+                                             : 'ผิดพลาด: ' + (err.message || err);
+    } finally { btn.disabled = false; }
+  };
+
+  /* ---------- แกลเลอรี ---------- */
+  let galImgs = [], galIdx = 0;
+  function openGallery(r){
+    galImgs = r.images || []; galIdx = 0;
+    if (!galImgs.length) return;
+    const p = payInfo(r);
+    $('mTitle').textContent = `${r.building ? 'ตึก ' + r.building + ' · ' : ''}ห้อง ${r.room_number} · ${r.status}`;
+    $('mInfo').textContent = `฿${Number(r.price).toLocaleString()} / เดือน\n${r.furniture || '-'}`
+      + (p ? `\nค่าเช่า: ${p.label} — ${p.note}` : '');
+    $('modal').classList.remove('hidden'); showImg();
+  }
+  function showImg(){
+    $('mImg').src = galImgs[galIdx];
+    $('mThumbs').innerHTML = galImgs.map((u, i) =>
+      `<img src="${esc(u)}" class="${i === galIdx ? 'on' : ''}" data-i="${i}">`).join('');
+    const multi = galImgs.length > 1;
+    $('mPrev').classList.toggle('hidden', !multi); $('mNext').classList.toggle('hidden', !multi);
+  }
+  const step = d => { galIdx = (galIdx + d + galImgs.length) % galImgs.length; showImg(); };
+  const closeGal = () => $('modal').classList.add('hidden');
+  $('mPrev').onclick = () => step(-1);
+  $('mNext').onclick = () => step(1);
+  $('mClose').onclick = closeGal;
+  $('modal').onclick = e => { if (e.target === $('modal')) closeGal(); };
+  $('mThumbs').onclick = e => { if (e.target.dataset.i){ galIdx = +e.target.dataset.i; showImg(); } };
+  document.addEventListener('keydown', e => {
+    if ($('modal').classList.contains('hidden')) return;
+    if (e.key === 'Escape') closeGal();
+    if (e.key === 'ArrowLeft') step(-1);
+    if (e.key === 'ArrowRight') step(1);
+  });
+
+  renderThumbs();
+</script>
+</body>
+</html>
